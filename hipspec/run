@@ -5,21 +5,30 @@ TIMEOUT=60 # seconds
 COUNT_TIMEOUT="0"
 COUNT_PASS="0"
 COUNT_UNKNOWN="0"
+COUNT_UNPROVED="0"
 
-for f in /benchmarks/hipspec/*.hs;
+for f in /benchmarks/hipspec4/*.hs;
 do
     output=$(bash -c "ulimit -t $TIMEOUT && timeout $TIMEOUT /usr/bin/time -v hipspec --processes=1 $f 2>&1")
     name=$(basename -s .hs $f)
+    func_name=$(echo "$name" | sed -E 's/(List|Maybe|Tuple|NonEmpty|Function|Tree)//g')
+    
     if grep -q "signal: 15$" <<< "$output"; then
         echo "$name & timeout"
         COUNT_TIMEOUT=$(expr $COUNT_TIMEOUT + 1)
     else
+        unproved=$(echo "$output" | sed -n '/^Unproved:/,/^$/p')
+        proved=$(echo "$output" | sed -n '/^Proved:/,/^$/p')
         t=$(echo "$output" | grep "User time (seconds):" | cut -f2 -d:)
-        if grep -q "^Proved:$" <<< "$output"; then
+        
+        if grep -q "$func_name" <<< "$unproved"; then
+            echo "$name & unproved"
+            COUNT_UNPROVED=$(expr $COUNT_UNPROVED + 1)
+        elif grep -q "$func_name" <<< "$proved"; then
             echo "$name & $t - proved"
             COUNT_PASS=$(expr $COUNT_PASS + 1)
         else
-            echo "$name & $t - unknown"
+            echo "$name & unknown"
             COUNT_UNKNOWN=$(expr $COUNT_UNKNOWN + 1)
         fi
     fi
@@ -29,4 +38,5 @@ done
 echo "Total:"
 echo "  Timeout: $COUNT_TIMEOUT"
 echo "  Unknown: $COUNT_UNKNOWN"
+echo "  Unproved: $COUNT_UNPROVED"
 echo "  Pass:    $COUNT_PASS"
