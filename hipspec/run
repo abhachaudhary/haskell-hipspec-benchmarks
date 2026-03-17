@@ -1,0 +1,32 @@
+#!/bin/bash
+
+TIMEOUT=60 # seconds
+
+COUNT_TIMEOUT="0"
+COUNT_PASS="0"
+COUNT_UNKNOWN="0"
+
+for f in /benchmarks/hipspec/*.hs;
+do
+    output=$(bash -c "ulimit -t $TIMEOUT && timeout $TIMEOUT /usr/bin/time -v hipspec --processes=1 $f 2>&1")
+    name=$(basename -s .hs $f)
+    if grep -q "signal: 15$" <<< "$output"; then
+        echo "$name & timeout"
+        COUNT_TIMEOUT=$(expr $COUNT_TIMEOUT + 1)
+    else
+        t=$(echo "$output" | grep "User time (seconds):" | cut -f2 -d:)
+        if grep -q "^Proved:$" <<< "$output"; then
+            echo "$name & $t - proved"
+            COUNT_PASS=$(expr $COUNT_PASS + 1)
+        else
+            echo "$name & $t - unknown"
+            COUNT_UNKNOWN=$(expr $COUNT_UNKNOWN + 1)
+        fi
+    fi
+    # echo "$elapsed"
+done
+
+echo "Total:"
+echo "  Timeout: $COUNT_TIMEOUT"
+echo "  Unknown: $COUNT_UNKNOWN"
+echo "  Pass:    $COUNT_PASS"
